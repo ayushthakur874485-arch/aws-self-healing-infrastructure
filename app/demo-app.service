@@ -10,6 +10,8 @@ WorkingDirectory=/opt/self-healing-app
 ExecStart=/opt/self-healing-app/venv/bin/python /opt/self-healing-app/app.py
 Restart=no
 Environment=PYTHONUNBUFFERED=1
+StandardOutput=append:/var/log/demo-app/app.log
+StandardError=append:/var/log/demo-app/app.log
 NoNewPrivileges=true
 PrivateTmp=true
 
