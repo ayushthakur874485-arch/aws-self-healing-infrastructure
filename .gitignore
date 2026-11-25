@@ -19,3 +19,5 @@ tfplan
 tfplan
 *.tfstate*
 .terraform/
+
+*.zip
