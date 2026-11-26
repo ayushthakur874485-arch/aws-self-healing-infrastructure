@@ -28,14 +28,26 @@ resource "aws_iam_role_policy" "lambda_ssm" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = ["ssm:SendCommand"]
-      Resource = [
-        "arn:aws:ec2:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:instance/${aws_instance.app_server.id}",
-        "arn:aws:ssm:${data.aws_region.current.region}::document/AWS-RunShellScript"
-      ]
-    }]
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = ["ssm:SendCommand"]
+        Resource = [
+          "arn:aws:ec2:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:instance/${aws_instance.app_server.id}",
+          "arn:aws:ssm:${data.aws_region.current.region}::document/AWS-RunShellScript"
+        ]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["ssm:GetCommandInvocation"]
+        Resource = "*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["sns:Publish"]
+        Resource = aws_sns_topic.recovery.arn
+      }
+    ]
   })
 }
 
@@ -44,13 +56,15 @@ resource "aws_lambda_function" "restart_app" {
   role             = aws_iam_role.lambda_restart.arn
   handler          = "restart_app.handler"
   runtime          = "python3.12"
-  timeout          = 30
+  timeout          = 60
   filename         = data.archive_file.restart_app.output_path
   source_code_hash = data.archive_file.restart_app.output_base64sha256
 
   environment {
     variables = {
-      INSTANCE_ID = aws_instance.app_server.id
+      INSTANCE_ID        = aws_instance.app_server.id
+      RECOVERY_TOPIC_ARN = aws_sns_topic.recovery.arn
+
     }
   }
 }
@@ -67,4 +81,14 @@ resource "aws_sns_topic_subscription" "lambda" {
   topic_arn = aws_sns_topic.alerts.arn
   protocol  = "lambda"
   endpoint  = aws_lambda_function.restart_app.arn
+}
+
+resource "aws_sns_topic" "recovery" {
+  name = "self-healing-infra-recovery"
+}
+
+resource "aws_sns_topic_subscription" "recovery_email" {
+  topic_arn = aws_sns_topic.recovery.arn
+  protocol  = "email"
+  endpoint  = var.alert_email
 }
