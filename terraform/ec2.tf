@@ -24,12 +24,21 @@ resource "aws_instance" "app_server" {
     delete_on_termination = true
   }
 
+  user_data = templatefile("${path.module}/user-data.sh.tftpl", {
+    app_py_b64  = base64encode(file("${path.module}/../app/app.py"))
+    service_b64 = base64encode(file("${path.module}/../app/demo-app.service"))
+    cw_b64      = base64encode(file("${path.module}/../monitoring/cloudwatch-agent.json"))
+  })
+
+  user_data_replace_on_change = true
+
   tags = {
     Name = "${var.project_name}-server"
     Role = "self-healing-app-server"
   }
 
   depends_on = [
-    aws_iam_role_policy_attachment.ssm_managed_instance
+    aws_iam_role_policy_attachment.ssm_managed_instance,
+    aws_iam_role_policy_attachment.cloudwatch_agent,
   ]
 }
