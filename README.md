@@ -58,8 +58,29 @@ and you get a "Recovery SUCCEEDED" email.
 
 ## What I learned
 
-- [Add 2 or 3 real points, for example the SSM first-boot credential race,
-  CloudWatch alarms needing exact metric dimensions, and avoiding an SNS-to-Lambda loop.]
+- - **Alarms need the exact metric dimensions.** The CloudWatch agent publishes the
+  process-count metric with extra dimensions (`pattern`, `pid_finder`). I checked
+  them with `list-metrics` before building the alarm, because a mismatch leaves it
+  stuck in `INSUFFICIENT_DATA`.
+- **First-boot IAM race.** The SSM agent started before the instance profile
+  credentials were available, so the instance never registered. I fixed it with
+  `depends_on` on the policy attachments and an SSM agent restart at the end of
+  user data.
+- **Avoiding an SNS-to-Lambda loop.** The Lambda is subscribed to the alerts topic,
+  so it publishes recovery results to a separate topic. Publishing to its own
+  trigger would invoke it endlessly.
+- **Windows line endings broke systemd.** Files written on Windows contain `\r`,
+  which makes unit-file lines invalid on Linux. The user-data script strips them
+  with `tr -d '\r'`.
+- **Missing data should count as a failure.** The app-down alarm uses
+  `treat_missing_data = "breaching"`, so a dead agent or dead instance also fires it,
+  not only a crashed process.
+- **Least privilege.** The Lambda role can only send commands to this one instance
+  with one SSM document, and publish to one topic.
+- **Reference resources instead of hardcoding IDs.** The alarms and Lambda use
+  `aws_instance.app_server.id`, so replacing the instance rewired everything
+  automatically and the recovery chain worked on the rebuilt server with no manual
+  changes.
 
 ## Limitations
 
